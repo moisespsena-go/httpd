@@ -3,58 +3,40 @@ package httpd
 import (
 	"net/http"
 
-	http_render "github.com/moisespsena-go/http-render"
+	"github.com/moisespsena-go/http-render/rrhandler"
 
-	"github.com/moisespsena-go/http-render/ropt"
+	"github.com/moisespsena-go/httpu"
 )
 
+type handler http.Handler
+
 type Server struct {
-	Handler                  http.Handler
-	RootDir                  string
-	RenderOrNotFoundDisabled bool
-	Render                   http_render.Render
-	RenderFunc               func(w http.ResponseWriter, r *http.Request) http_render.Render
+	Handler       http.Handler
+	RenderHandler *rrhandler.RequestRenderHandler
 }
 
-func New(handler http.Handler) *Server {
-	return &Server{Handler: handler}
+func New(srv ...*Server) (s *Server) {
+	for _, s = range srv {
+	}
+	if s == nil {
+		s = &Server{}
+	}
+	s.init()
+	return
 }
 
-func (this Server) GetOrCreateRender() (Render http_render.Render) {
-	return this.Render.Option(ropt.Dir(this.RootDir))
-}
-
-func (this *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	writed := &writed{ResponseWriter: w}
-	this.Handler.ServeHTTP(writed, r)
-	if !writed.writed {
-		var Render http_render.Render
-		if this.RenderFunc != nil {
-			Render = this.RenderFunc(w, r)
-		} else {
-			Render = this.GetOrCreateRender().Option(ropt.Request(r))
-		}
-		r := Render.Option(ropt.FileNames(r.URL.Path))
-		r.Status = http.StatusOK
-		if this.RenderOrNotFoundDisabled {
-			r.Render(w)
-		} else {
-			r.MustRenderOrNotFound(w)
-		}
+func (this *Server) init() {
+	if this.RenderHandler == nil {
+		this.RenderHandler = &rrhandler.RequestRenderHandler{}
+	}
+	if this.Handler == nil {
+		this.Handler = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	}
 }
 
-type writed struct {
-	http.ResponseWriter
-	writed bool
-}
-
-func (this *writed) WriteHeader(s int) {
-	this.writed = true
-	this.ResponseWriter.WriteHeader(s)
-}
-
-func (this *writed) Write(p []byte) (n int, err error) {
-	this.writed = true
-	return this.ResponseWriter.Write(p)
+func (this *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	httpu.Fallback(
+		this.Handler,
+		this.RenderHandler,
+	).ServeHTTP(w, r)
 }
